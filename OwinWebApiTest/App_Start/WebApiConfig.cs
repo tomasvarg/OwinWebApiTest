@@ -7,7 +7,7 @@ namespace OwinWebApiTest
 {
     public static class WebApiConfig
     {
-        public static void Register(HttpConfiguration config)
+        public static HttpConfiguration Register(HttpConfiguration config)
         {
             // Web API configuration and services
 
@@ -19,6 +19,8 @@ namespace OwinWebApiTest
                 routeTemplate: "api/{controller}/{id}",
                 defaults: new { id = RouteParameter.Optional }
             );
+
+            return config;
         }
     }
 }
