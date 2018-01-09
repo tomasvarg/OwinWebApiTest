@@ -39,8 +39,8 @@ namespace OwinWebApiTest.Providers
             dynamic args = await context.Request.ReadFormAsync();
 
             if (string.IsNullOrEmpty(args["ticket"]) || string.IsNullOrEmpty(args["service"])) {
-                context.SetError("invalid_grant", "No CAS ticket or service URL sent.");
                 context.Rejected();
+                context.SetError("invalid_grant", "No CAS ticket or service URL sent.");
                 return;
             }
 
@@ -59,13 +59,17 @@ namespace OwinWebApiTest.Providers
 
             //var acda = new AccessControlDA();
             //var ac = acda.GetAccessControl(res.success.user);
-            var ac = new { userId = args["username"], saveAllowed = true, saveAllUnits = true };
+            var ac = new { userId = res.success.user, canRead = true, canSave = true };
+
+            if (ac == null) {
+                context.Rejected();
+                context.SetError("invalid_grant", $"User '{res.success.user}' not found");
+                return;
+            }
 
             ClaimsIdentity identity = new ClaimsIdentity(context.Options.AuthenticationType);
             identity.AddClaim(new Claim(ClaimTypes.Name, res.success.user));
-            identity.AddClaim(new Claim(ClaimTypes.Role, "User"));
-            //identity.AddClaim(new Claim("user_name", context.UserName));
-            //identity.AddClaim(new Claim("sub", context.UserName));
+            identity.AddClaim(new Claim(ClaimTypes.Role, "Admin"));
 
             // Identity info will be encoded into an Access ticket as a result of this call:
             //context.Validated(identity);
@@ -77,6 +81,17 @@ namespace OwinWebApiTest.Providers
 
             var ticket = new AuthenticationTicket(identity, props);
             context.Validated(ticket);
+        }
+
+        // needed to get the custom props as a part of the token-granted response
+        public override Task TokenEndpoint(OAuthTokenEndpointContext context)
+        {
+            foreach (KeyValuePair<string, string> property in context.Properties.Dictionary)
+            {
+                context.AdditionalResponseParameters.Add(property.Key, property.Value);
+            }
+
+            return Task.FromResult<object>(null);
         }
 
         private async Task<CasServiceValidationResponse> ValidateCasTicket(string ticket, string service)
