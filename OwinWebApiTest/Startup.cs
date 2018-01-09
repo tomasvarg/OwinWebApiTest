@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Configuration;
+using System.IO;
 using System.Threading.Tasks;
 using Owin;
 using Microsoft.Owin;
 using Microsoft.Owin.Cors;
 using Microsoft.Owin.Security.OAuth;
+using Microsoft.Owin.FileSystems;
+using Microsoft.Owin.StaticFiles;
 using System.Web.Http;
 using System.Net;
 
@@ -42,6 +45,31 @@ namespace OwinWebApiTest
             // allow self-signed certificates
             ServicePointManager.ServerCertificateValidationCallback +=
                 (sender, cert, chain, sslPolicyErrors) => true;
+
+            string webDir = ConfigurationManager.AppSettings["WebDirectory"];
+            if (string.IsNullOrEmpty(webDir)) webDir = "Web";
+            app.UseFileServer(GetFileServerOptions(PathString.Empty, webDir));
+
+            string docDir = ConfigurationManager.AppSettings["DocDirectory"];
+            if (string.IsNullOrEmpty(docDir)) docDir = "Doc";
+            app.UseFileServer(GetFileServerOptions(new PathString("/doc"), docDir));
+        }
+
+        private FileServerOptions GetFileServerOptions(PathString pathString, string dir)
+        {
+            string appRoot = AppDomain.CurrentDomain.BaseDirectory;
+            var fileSystem = new PhysicalFileSystem(Path.Combine(appRoot, dir));
+
+            var options = new FileServerOptions
+            {
+                RequestPath = pathString,
+                EnableDefaultFiles = true,
+                FileSystem = fileSystem
+            };
+            options.StaticFileOptions.FileSystem = fileSystem;
+            options.StaticFileOptions.ServeUnknownFileTypes = false;
+
+            return options;
         }
     }
 }
