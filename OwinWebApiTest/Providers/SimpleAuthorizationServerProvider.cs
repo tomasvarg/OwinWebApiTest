@@ -8,12 +8,12 @@ namespace OwinWebApiTest.Providers
     {
         public override async Task ValidateClientAuthentication(OAuthValidateClientAuthenticationContext context)
         {
-            context.Validated();
+            await Task.FromResult(context.Validated());
         }
 
         public override async Task GrantResourceOwnerCredentials(OAuthGrantResourceOwnerCredentialsContext context)
         {
-            context.Validated(new ClaimsIdentity(context.Options.AuthenticationType));
+            await Task.FromResult(context.Validated(new ClaimsIdentity(context.Options.AuthenticationType)));
         }
 
     }
