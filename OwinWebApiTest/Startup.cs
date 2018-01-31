@@ -1,13 +1,10 @@
 ﻿using System;
 using System.Configuration;
-using System.IO;
 using System.Threading.Tasks;
 using Owin;
 using Microsoft.Owin;
 using Microsoft.Owin.Cors;
 using Microsoft.Owin.Security.OAuth;
-using Microsoft.Owin.FileSystems;
-using Microsoft.Owin.StaticFiles;
 using System.Web.Http;
 using System.Net;
 
@@ -17,6 +14,9 @@ using OwinWebApiTest.Providers;
 
 namespace OwinWebApiTest
 {
+    /**
+     * Application entry point.
+     */
     public class Startup
     {
         public void Configuration(IAppBuilder app)
@@ -46,30 +46,15 @@ namespace OwinWebApiTest
             ServicePointManager.ServerCertificateValidationCallback +=
                 (sender, cert, chain, sslPolicyErrors) => true;
 
+            // configure web root
             string webDir = ConfigurationManager.AppSettings["WebDirectory"];
             if (string.IsNullOrEmpty(webDir)) webDir = "Web";
-            app.UseFileServer(GetFileServerOptions(PathString.Empty, webDir));
+            app.UseFileServer(FileServerConfig.Create(PathString.Empty, webDir));
 
+            // configure web root for /doc url
             string docDir = ConfigurationManager.AppSettings["DocDirectory"];
             if (string.IsNullOrEmpty(docDir)) docDir = "Doc";
-            app.UseFileServer(GetFileServerOptions(new PathString("/doc"), docDir));
-        }
-
-        private FileServerOptions GetFileServerOptions(PathString pathString, string dir)
-        {
-            string appRoot = AppDomain.CurrentDomain.BaseDirectory;
-            var fileSystem = new PhysicalFileSystem(Path.Combine(appRoot, dir));
-
-            var options = new FileServerOptions
-            {
-                RequestPath = pathString,
-                EnableDefaultFiles = true,
-                FileSystem = fileSystem
-            };
-            options.StaticFileOptions.FileSystem = fileSystem;
-            options.StaticFileOptions.ServeUnknownFileTypes = false;
-
-            return options;
+            app.UseFileServer(FileServerConfig.Create(new PathString("/doc"), docDir));
         }
     }
 }

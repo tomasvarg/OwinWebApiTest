@@ -1,6 +1,6 @@
-﻿using Microsoft.Owin.Security.OAuth;
+﻿using Microsoft.Owin.Infrastructure;
+using Microsoft.Owin.Security.OAuth;
 using Microsoft.Owin.Security;
-using Microsoft.Owin.Infrastructure;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 using System.Collections.Generic;
@@ -13,7 +13,12 @@ using OwinWebApiTest.Models;
 
 namespace OwinWebApiTest.Providers
 {
-
+    /**
+     * CAS Single Sign On Authorization Provider.
+     *
+     * Authenticates user against CAS server login and grants authorization;
+     * provides authenticated user with access_token and AccessControl dataset.
+     */
     public class CasAuthorizationServerProvider : OAuthAuthorizationServerProvider
     {
         private static string casValidationUrl;
@@ -26,13 +31,30 @@ namespace OwinWebApiTest.Providers
             serviceUser = ConfigurationManager.AppSettings["ServiceUser"];
         }
 
+        /**
+         * Client authentication
+         * 
+         * Superseded by CAS authentication but is required, so just validate
+         */
         public override async Task ValidateClientAuthentication(
             OAuthValidateClientAuthenticationContext context)
         {
-            // required but as we're not using client auth just validate & move on...
             await Task.FromResult(context.Validated());
         }
 
+        /**
+         * Performs CAS ticket validation & grants authorization
+         *
+         * Expected params (POST method):
+         * "ticket" (provided to the client by the CAS server on a successful login)
+         * "service" (application url - against which the login attempt was performed)
+         * "grant_type=password"
+         *
+         * See TokenEndpointPath in Startup.cs for the autorization entry point URL
+         *
+         * If successful, grants authorization and returns client a response with
+         * a valid "access_token", "username" and (app-specific) "AccessControl" dataset
+         */
         public override async Task GrantResourceOwnerCredentials(
             OAuthGrantResourceOwnerCredentialsContext context)
         {
@@ -40,7 +62,7 @@ namespace OwinWebApiTest.Providers
 
             if (string.IsNullOrEmpty(args["ticket"]) || string.IsNullOrEmpty(args["service"])) {
                 context.Rejected();
-                context.SetError("invalid_grant", "No CAS ticket or service URL sent.");
+                context.SetError("invalid_grant", "No CAS ticket or service URL sent");
                 return;
             }
 
@@ -57,6 +79,7 @@ namespace OwinWebApiTest.Providers
                 return;
             }
 
+            // once the CAS auth is done, gather additional data about the user (app-specific)
             //var acda = new AccessControlDA();
             //var ac = acda.GetAccessControl(res.success.user);
             var ac = new { userId = res.success.user, canRead = true, canSave = true };
@@ -69,9 +92,10 @@ namespace OwinWebApiTest.Providers
 
             ClaimsIdentity identity = new ClaimsIdentity(context.Options.AuthenticationType);
             identity.AddClaim(new Claim(ClaimTypes.Name, res.success.user));
-            identity.AddClaim(new Claim(ClaimTypes.Role, "Admin"));
+            identity.AddClaim(new Claim(ClaimTypes.Role, "User"));
 
-            // Identity info will be encoded into an Access ticket as a result of this call:
+            // To add app-specific data to the access token response use AuthenticationProperties
+            // as below, for plain access token response identity will be encoded into it this way:
             //context.Validated(identity);
 
             var props = new AuthenticationProperties(new Dictionary<string, string> {
@@ -83,7 +107,9 @@ namespace OwinWebApiTest.Providers
             context.Validated(ticket);
         }
 
-        // needed to get the custom props as a part of the token-granted response
+        /**
+         * Necessary to add the AuthenticationProperties to the AuthenticationTicket
+         */
         public override Task TokenEndpoint(OAuthTokenEndpointContext context)
         {
             foreach (KeyValuePair<string, string> property in context.Properties.Dictionary)
@@ -94,6 +120,9 @@ namespace OwinWebApiTest.Providers
             return Task.FromResult<object>(null);
         }
 
+        /**
+         * Validates CAS ticket received from the frontend against the CAS server
+         */
         private async Task<CasServiceValidationResponse> ValidateCasTicket(string ticket, string service)
         {
             var requestUri = WebUtilities.AddQueryString(casValidationUrl, new Dictionary<string, string>() {
@@ -108,6 +137,9 @@ namespace OwinWebApiTest.Providers
             }
         }
 
+        /**
+         * Sends the CAS ticket validation request and gets relevant data from a response
+         */
         public async Task<CasServiceValidationResponse> GetCasServiceValidationAsync(
             HttpClient client, string requestUri)
         {
